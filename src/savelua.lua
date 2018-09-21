@@ -31,7 +31,7 @@ serializeFunction = function(registry, data)
 
         -- Add the definition to the output
         registry.output = registry.output
-            .. dataId .. "=(loadstring or load)(" .. serializeString(string.dump(data)) .. ");"
+            .. "local " .. dataId .. "=(loadstring or load)(" .. serializeString(string.dump(data)) .. ");"
     end
 
     return registry[data]
@@ -45,19 +45,53 @@ serializeTable = function(registry, data)
         registry[data] = dataId
 
         -- Add the definition to the output
-        local tablePreamble = ""
+        local tablePreamble = dataId .. "={"
 
-        tablePreamble = tablePreamble .. dataId .. "={"
-
+        local selfReferenceValues = {}
+        local selfReferenceKeys = {}
         for key, _ in pairs(data) do
-            tablePreamble = tablePreamble
-                .. "[" .. serializeValue(registry, key) .. "]"
-                .. "="
-                .. serializeValue(registry, rawget(data, key))
-                .. ","
+            local value = rawget(data, key)
+
+            if value ~= data and key ~= data then
+                tablePreamble = tablePreamble
+                    .. "[" .. serializeValue(registry, key) .. "]"
+                    .. "="
+                    .. serializeValue(registry, value)
+                    .. ","
+            elseif value == data then
+                    table.insert(selfReferenceValues, key)
+            elseif key == data then
+                table.insert(selfReferenceKeys, value)
+            end
         end
 
         tablePreamble = tablePreamble .. "};"
+
+        -- Handle self references
+        for i = 1, #selfReferenceValues do
+            local selfReference = selfReferenceValues[i]
+
+            if selfReference ~= data then
+                -- t[k] = t
+                tablePreamble = tablePreamble
+                    .. dataId .. "[" .. serializeValue(registry, selfReference) .. "]="
+                    .. dataId .. ";"
+            else
+                -- t[t] = t
+                tablePreamble = tablePreamble
+                    .. dataId .. "[" .. dataId .. "]="
+                    .. dataId .. ";"
+            end
+        end
+
+        for i = 1, #selfReferenceKeys do
+            local selfReference = selfReferenceKeys[i]
+
+            -- t[t] = v
+            tablePreamble = tablePreamble
+                .. dataId .. "[" .. dataId .. "]="
+                .. serializeValue(registry, selfReference) .. ";"
+        end
 
         local metatable = getmetatable(data)
 
@@ -67,7 +101,7 @@ serializeTable = function(registry, data)
                 .. "setmetatable(" .. dataId.. ", " .. mtId .. ");"
         end
 
-        registry.output = registry.output .. tablePreamble
+        registry.output = registry.output .. "local " .. tablePreamble
     end
 
     return registry[data]
