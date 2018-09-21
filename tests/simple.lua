@@ -9,7 +9,6 @@ it("handles a basic table", function()
     }
 
     local serialized = serialize(basicTable)
-
     local deserialized = (loadstring or load)(serialized)
 
     assert.is_not_nil(deserialized)
@@ -35,7 +34,6 @@ it("handles a basic table with metatable", function()
     setmetatable(basicTable, mt)
 
     local serialized = serialize(basicTable)
-
     local deserialized = (loadstring or load)(serialized)
 
     assert.is_not_nil(deserialized)
@@ -47,17 +45,13 @@ it("handles a basic table with metatable", function()
     assert.are.equals("hello from __call", data())
 end)
 
-it("handles table loop: t[t] = t, t[k] = t", function()
-    local basicTable = {
-        1, 2, 3,
-        one = 1, two = 2, three = 3,
-    }
+it("handles table self reference: t[t] = t, t[k] = t", function()
+    local basicTable = {}
 
     basicTable.loop = basicTable
     basicTable[basicTable] = basicTable
 
     local serialized = serialize(basicTable)
-
     local deserialized = (loadstring or load)(serialized)
 
     assert.is_not_nil(deserialized)
@@ -69,16 +63,12 @@ it("handles table loop: t[t] = t, t[k] = t", function()
     assert.are.equals(data, data[data])
 end)
 
-it("handles table loop: t[t] = v", function()
-    local basicTable = {
-        1, 2, 3,
-        one = 1, two = 2, three = 3,
-    }
+it("handles table self reference: t[t] = v", function()
+    local basicTable = {}
 
     basicTable[basicTable] = "loop"
 
     local serialized = serialize(basicTable)
-
     local deserialized = (loadstring or load)(serialized)
 
     assert.is_not_nil(deserialized)
@@ -89,19 +79,14 @@ it("handles table loop: t[t] = v", function()
     assert.are.equals("loop", data[data])
 end)
 
-it("handles deep table loop", function()
+it("handles deep self reference", function()
     local basicTable = {
-        1, 2, 3,
-        one = 1, two = 2, three = 3,
         loop = {}
     }
 
-    basicTable.loop["deep"] = basicTable
+    basicTable.loop.deep = basicTable
 
     local serialized = serialize(basicTable)
-
-    print(serialized)
-
     local deserialized = (loadstring or load)(serialized)
 
     assert.is_not_nil(deserialized)
@@ -109,5 +94,45 @@ it("handles deep table loop", function()
     local ok, data = pcall(deserialized)
 
     assert.is_true(ok)
-    assert.are.equals("loop", data[data])
+    assert.are.equals(data, data.loop.deep)
+end)
+
+it("handles complex deep self reference 1", function()
+    local basicTable = {
+        loop = {}
+    }
+
+    basicTable.loop.deep = basicTable
+    basicTable.loop.deep.gotcha = basicTable.loop
+
+    local serialized = serialize(basicTable)
+    local deserialized = (loadstring or load)(serialized)
+
+    assert.is_not_nil(deserialized)
+
+    local ok, data = pcall(deserialized)
+
+    assert.is_true(ok)
+    assert.are.equals(data, data.loop.deep, basicTable.loop.deep.gotcha)
+end)
+
+it("handles complex deep self reference 2", function()
+    local basicTable = {
+        loop = {},
+        intermediate = { "intermediate" }
+    }
+
+    basicTable.loop.deep = basicTable
+    basicTable.loop.gotcha = basicTable.intermediate
+
+    local serialized = serialize(basicTable)
+    local deserialized = (loadstring or load)(serialized)
+
+    assert.is_not_nil(deserialized)
+
+    local ok, data = pcall(deserialized)
+
+    assert.is_true(ok)
+    assert.are.equals(data, data.loop.deep)
+    assert.are.equals(data.intermediate, data.loop.gotcha)
 end)
