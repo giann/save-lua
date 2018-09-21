@@ -2,8 +2,6 @@ package.path = package.path .. ";./?.lua"
 
 local uuid = require("uuid")
 
-local saveLua = {}
-
 local getchr, serializeString, serializeNumber, serializeBoolean, serializeFunction, serializeTable, serializeValue
 
 getchr = function(c)
@@ -31,8 +29,8 @@ serializeFunction = function(registry, data)
         -- Register the function
         registry[data] = dataId
 
-        -- Add the definition to the preamble
-        registry.preamble = registry.preamble
+        -- Add the definition to the output
+        registry.output = registry.output
             .. dataId .. "=(loadstring or load)(" .. serializeString(string.dump(data)) .. ");"
     end
 
@@ -46,25 +44,30 @@ serializeTable = function(registry, data)
         -- Register the table
         registry[data] = dataId
 
-        -- Add the definition to the preamble
-        registry.preamble = registry.preamble .. dataId .. "={"
+        -- Add the definition to the output
+        local tablePreamble = ""
+
+        tablePreamble = tablePreamble .. dataId .. "={"
 
         for key, _ in pairs(data) do
-            registry.preamble = registry.preamble
+            tablePreamble = tablePreamble
                 .. "[" .. serializeValue(registry, key) .. "]"
                 .. "="
                 .. serializeValue(registry, rawget(data, key))
                 .. ","
         end
 
-        registry.preamble = registry.preamble .. "};"
+        tablePreamble = tablePreamble .. "};"
 
         local metatable = getmetatable(data)
 
         if metatable then
-            registry.preamble = registry.preamble
-                .. "setmetatable(" .. dataId.. ", " .. serializeTable(registry, metatable) .. ");"
+            local mtId = serializeTable(registry, metatable)
+            tablePreamble = tablePreamble
+                .. "setmetatable(" .. dataId.. ", " .. mtId .. ");"
         end
+
+        registry.output = registry.output .. tablePreamble
     end
 
     return registry[data]
@@ -73,34 +76,30 @@ end
 serializeValue = function(registry, value)
     local valueType = type(value)
 
-    local serialized = ""
-
     if valueType == "string" then
-        serialized = serialized .. serializeString(value)
+        return serializeString(value)
     elseif valueType == "number" then
-        serialized = serialized .. serializeNumber(value)
+        return serializeNumber(value)
     elseif valueType == "boolean" then
-        serialized = serialized .. serializeBoolean(value)
+        return serializeBoolean(value)
     elseif valueType == "table" then
-        serialized = serialized .. serializeTable(registry, value)
+        return serializeTable(registry, value)
     elseif valueType == "function" then
-        serialized = serialized .. serializeFunction(registry, value)
+        return serializeFunction(registry, value)
     else
         error("Data of type " .. valueType .. " is unsupported")
     end
 
-    return serialized
+    return nil
 end
 
-saveLua.serialize = function(data)
+return function(data)
     local registry = {
         values = {},
-        preamble = ""
+        output = ""
     }
 
     local serialized = serializeValue(registry, data)
 
-    return registry.preamble .. "return " .. serialized
+    return registry.output .. "return " .. serialized
 end
-
-return saveLua
