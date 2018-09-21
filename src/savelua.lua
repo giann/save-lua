@@ -33,10 +33,10 @@ serializeFunction = function(registry, data)
         -- Add the definition to the output
         registry.output = registry.output
             .. "local " .. dataId .. "=(loadstring or load)(" .. serializeString(string.dump(data)) .. ");"
-    end
 
-    -- Data is now fully defined
-    registry.uncomplete[data] = nil
+        -- Data is now fully defined
+        registry.uncomplete[data] = nil
+    end
 
     return registry.values[data]
 end
@@ -127,32 +127,34 @@ serializeTable = function(registry, data)
         end
 
         registry.output = registry.output .. "local " .. tableOutput
-    end
 
-    -- Data is now fully defined
-    registry.uncomplete[data] = nil
+        -- Data is now fully defined
+        registry.uncomplete[data] = nil
+    end
 
     return registry.values[data]
 end
 
 serializeValue = function(registry, value)
-    local valueType = type(value)
+    if not registry.values[value] then
+        local valueType = type(value)
 
-    if valueType == "string" then
-        return serializeString(value)
-    elseif valueType == "number" then
-        return serializeNumber(value)
-    elseif valueType == "boolean" then
-        return serializeBoolean(value)
-    elseif valueType == "table" then
-        return serializeTable(registry, value)
-    elseif valueType == "function" then
-        return serializeFunction(registry, value)
-    else
-        error("Data of type " .. valueType .. " is unsupported")
+        if valueType == "string" then
+            return serializeString(value)
+        elseif valueType == "number" then
+            return serializeNumber(value)
+        elseif valueType == "boolean" then
+            return serializeBoolean(value)
+        elseif valueType == "table" then
+            return serializeTable(registry, value)
+        elseif valueType == "function" then
+            return serializeFunction(registry, value)
+        else
+            error("Data of type " .. valueType .. " is unsupported")
+        end
     end
 
-    return nil
+    return registry.values[value]
 end
 
 return function(data)
@@ -163,6 +165,12 @@ return function(data)
         output = "",
         post = ""
     }
+
+    if _G.__classes then
+        for name, class in pairs(_G.__classes) do
+            registry.values[class] = "_G.__classes[" .. serializeString(name) .. "]"
+        end
+    end
 
     local serialized = serializeValue(registry, data)
 
