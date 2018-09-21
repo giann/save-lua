@@ -45,7 +45,7 @@ serializeTable = function(registry, data)
         registry[data] = dataId
 
         -- Add the definition to the output
-        local tablePreamble = dataId .. "={"
+        local tablePreamble = dataId .. "={};"
 
         local selfReferenceValues = {}
         local selfReferenceKeys = {}
@@ -54,18 +54,19 @@ serializeTable = function(registry, data)
 
             if value ~= data and key ~= data then
                 tablePreamble = tablePreamble
-                    .. "[" .. serializeValue(registry, key) .. "]"
-                    .. "="
-                    .. serializeValue(registry, value)
+                    .. "rawset("
+                    .. dataId
                     .. ","
+                    .. serializeValue(registry, key)
+                    .. ","
+                    .. serializeValue(registry, value)
+                    .. ");"
             elseif value == data then
                     table.insert(selfReferenceValues, key)
             elseif key == data then
                 table.insert(selfReferenceKeys, value)
             end
         end
-
-        tablePreamble = tablePreamble .. "};"
 
         -- Handle self references
         for i = 1, #selfReferenceValues do
@@ -74,13 +75,21 @@ serializeTable = function(registry, data)
             if selfReference ~= data then
                 -- t[k] = t
                 tablePreamble = tablePreamble
-                    .. dataId .. "[" .. serializeValue(registry, selfReference) .. "]="
-                    .. dataId .. ";"
+                    .. "rawset("
+                    .. dataId
+                    .. ","
+                    .. serializeValue(registry, selfReference)
+                    .. ","
+                    .. dataId .. ");"
             else
                 -- t[t] = t
                 tablePreamble = tablePreamble
-                    .. dataId .. "[" .. dataId .. "]="
-                    .. dataId .. ";"
+                    .. "rawset("
+                    .. dataId
+                    .. ","
+                    .. dataId
+                    .. ","
+                    .. dataId .. ");"
             end
         end
 
@@ -89,8 +98,12 @@ serializeTable = function(registry, data)
 
             -- t[t] = v
             tablePreamble = tablePreamble
-                .. dataId .. "[" .. dataId .. "]="
-                .. serializeValue(registry, selfReference) .. ";"
+                .. "rawset("
+                .. dataId
+                .. ","
+                .. dataId
+                .. ","
+                .. serializeValue(registry, selfReference) .. ");"
         end
 
         local metatable = getmetatable(data)
