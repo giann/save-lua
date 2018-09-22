@@ -1,5 +1,4 @@
-local getchr, serializeString, serializeNumber, serializeBoolean,
-    serializeFunction, serializeTable, serializeValue, nextId
+local getchr, serializeString, serializeFunction, serializeTable, serializeValue, nextId
 
 getchr = function(c)
     return "\\" .. c:byte()
@@ -8,14 +7,6 @@ end
 serializeString = function(data)
     -- https://github.com/gvx/Ser/blob/master/ser.lua#L7-L9
     return ("%q"):format(data):gsub('\n', 'n'):gsub("[\128-\255]", getchr)
-end
-
-serializeNumber = function(data)
-    return data .. ""
-end
-
-serializeBoolean = function(data)
-    return data and "true" or "false"
 end
 
 -- Warning: upvalue are not serialized
@@ -49,70 +40,24 @@ serializeTable = function(registry, data)
         -- Add the definition to the output
         local tableOutput = "values[\"" .. dataId .. "\"]={}\n"
 
-        local selfReferenceValues = {}
-        local selfReferenceKeys = {}
         for key, _ in pairs(data) do
             local value = rawget(data, key)
 
-            if value ~= data and key ~= data then
-                local set = function()
-                    return "rawset("
-                    .. "values[\"" .. dataId .. "\"]"
-                    .. ","
-                    .. serializeValue(registry, key)
-                    .. ","
-                    .. serializeValue(registry, value)
-                    .. ")\n"
-                end
-
-                if registry.uncomplete[key] or registry.uncomplete[value] then
-                    registry.post = set() .. registry.post
-                else
-                    tableOutput = tableOutput .. set()
-                end
-            elseif value == data then
-                table.insert(selfReferenceValues, key)
-            elseif key == data then
-                table.insert(selfReferenceKeys, value)
+            local set = function()
+                return "rawset("
+                .. "values[\"" .. dataId .. "\"]"
+                .. ","
+                .. serializeValue(registry, key)
+                .. ","
+                .. serializeValue(registry, value)
+                .. ")\n"
             end
-        end
 
-        -- Handle self references
-        for i = 1, #selfReferenceValues do
-            local selfReference = selfReferenceValues[i]
-
-            if selfReference ~= data then
-                -- t[k] = t
-                tableOutput = tableOutput
-                    .. "rawset("
-                    .. "values[\"" .. dataId .. "\"]"
-                    .. ","
-                    .. serializeValue(registry, selfReference)
-                    .. ","
-                    .. "values[\"" .. dataId .. "\"]" .. ")\n"
+            if registry.uncomplete[key] or registry.uncomplete[value] then
+                registry.post = set() .. registry.post
             else
-                -- t[t] = t
-                tableOutput = tableOutput
-                    .. "rawset("
-                    .. "values[\"" .. dataId .. "\"]"
-                    .. ","
-                    .. "values[\"" .. dataId .. "\"]"
-                    .. ","
-                    .. "values[\"" .. dataId .. "\"]" .. ")\n"
+                tableOutput = tableOutput .. set()
             end
-        end
-
-        for i = 1, #selfReferenceKeys do
-            local selfReference = selfReferenceKeys[i]
-
-            -- t[t] = v
-            tableOutput = tableOutput
-                .. "rawset("
-                .. "values[\"" .. dataId .. "\"]"
-                .. ","
-                .. "values[\"" .. dataId .. "\"]"
-                .. ","
-                .. serializeValue(registry, selfReference) .. ")\n"
         end
 
         local metatable = getmetatable(data)
@@ -139,9 +84,9 @@ serializeValue = function(registry, value)
         if valueType == "string" then
             return serializeString(value)
         elseif valueType == "number" then
-            return serializeNumber(value)
+            return value .. ""
         elseif valueType == "boolean" then
-            return serializeBoolean(value)
+            return value and "true" or "false"
         elseif valueType == "table" then
             return "values[\"" .. serializeTable(registry, value) .. "\"]"
         elseif valueType == "function" then
@@ -156,7 +101,6 @@ end
 
 nextId = function(registry)
     registry.lastId = registry.lastId + 1
-
     return "ls_" .. registry.lastId
 end
 
