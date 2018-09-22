@@ -1,8 +1,5 @@
-package.path = package.path .. ";./?.lua"
-
-local uuid = require("uuid")
-
-local getchr, serializeString, serializeNumber, serializeBoolean, serializeFunction, serializeTable, serializeValue
+local getchr, serializeString, serializeNumber, serializeBoolean,
+    serializeFunction, serializeTable, serializeValue, nextId
 
 getchr = function(c)
     return "\\" .. c:byte()
@@ -24,7 +21,7 @@ end
 -- Warning: upvalue are not serialized
 serializeFunction = function(registry, data)
     if not registry.values[data] then
-        local dataId = "ls_" .. uuid():gsub("-", "_")
+        local dataId = nextId(registry)
 
         -- Register the function
         registry.values[data] = dataId
@@ -43,7 +40,7 @@ end
 
 serializeTable = function(registry, data)
     if not registry.values[data] then
-        local dataId = "ls_" .. uuid():gsub("-", "_")
+        local dataId = nextId(registry)
 
         -- Register the table
         registry.values[data] = dataId
@@ -157,20 +154,27 @@ serializeValue = function(registry, value)
     return "values[\"" .. registry.values[value] .. "\"]"
 end
 
+nextId = function(registry)
+    registry.lastId = registry.lastId + 1
+
+    return "ls_" .. registry.lastId
+end
+
 return function(data)
     local registry = {
         -- Value that are not fully defined yet
         uncomplete = {},
         values = {},
         output = "",
-        post = ""
+        post = "",
+        lastId = 0
     }
 
     local preamble = "local values = {}\n"
 
     if _G.__classes then
         for name, class in pairs(_G.__classes) do
-            local dataId = "ls_" .. uuid():gsub("-", "_")
+            local dataId = nextId(registry)
             registry.values[class] = dataId
             preamble = preamble .. "values[\"" .. dataId .. "\"]=_G.__classes[" .. serializeString(name) .. "]\n"
         end
