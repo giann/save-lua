@@ -32,7 +32,7 @@ serializeFunction = function(registry, data)
 
         -- Add the definition to the output
         registry.output = registry.output
-            .. "local " .. dataId .. "=(loadstring or load)(" .. serializeString(string.dump(data)) .. ");"
+            .. "values[\"" .. dataId .. "\"]=(loadstring or load)(" .. serializeString(string.dump(data)) .. ")\n"
 
         -- Data is now fully defined
         registry.uncomplete[data] = nil
@@ -50,7 +50,7 @@ serializeTable = function(registry, data)
         registry.uncomplete[data] = dataId
 
         -- Add the definition to the output
-        local tableOutput = dataId .. "={};"
+        local tableOutput = "values[\"" .. dataId .. "\"]={}\n"
 
         local selfReferenceValues = {}
         local selfReferenceKeys = {}
@@ -60,12 +60,12 @@ serializeTable = function(registry, data)
             if value ~= data and key ~= data then
                 local set = function()
                     return "rawset("
-                    .. dataId
+                    .. "values[\"" .. dataId .. "\"]"
                     .. ","
                     .. serializeValue(registry, key)
                     .. ","
                     .. serializeValue(registry, value)
-                    .. ");"
+                    .. ")\n"
                 end
 
                 if registry.uncomplete[key] or registry.uncomplete[value] then
@@ -88,20 +88,20 @@ serializeTable = function(registry, data)
                 -- t[k] = t
                 tableOutput = tableOutput
                     .. "rawset("
-                    .. dataId
+                    .. "values[\"" .. dataId .. "\"]"
                     .. ","
                     .. serializeValue(registry, selfReference)
                     .. ","
-                    .. dataId .. ");"
+                    .. "values[\"" .. dataId .. "\"]" .. ")\n"
             else
                 -- t[t] = t
                 tableOutput = tableOutput
                     .. "rawset("
-                    .. dataId
+                    .. "values[\"" .. dataId .. "\"]"
                     .. ","
-                    .. dataId
+                    .. "values[\"" .. dataId .. "\"]"
                     .. ","
-                    .. dataId .. ");"
+                    .. "values[\"" .. dataId .. "\"]" .. ")\n"
             end
         end
 
@@ -111,11 +111,11 @@ serializeTable = function(registry, data)
             -- t[t] = v
             tableOutput = tableOutput
                 .. "rawset("
-                .. dataId
+                .. "values[\"" .. dataId .. "\"]"
                 .. ","
-                .. dataId
+                .. "values[\"" .. dataId .. "\"]"
                 .. ","
-                .. serializeValue(registry, selfReference) .. ");"
+                .. serializeValue(registry, selfReference) .. ")\n"
         end
 
         local metatable = getmetatable(data)
@@ -123,10 +123,10 @@ serializeTable = function(registry, data)
         if metatable then
             local mtId = serializeTable(registry, metatable)
             tableOutput = tableOutput
-                .. "setmetatable(" .. dataId.. ", " .. mtId .. ");"
+                .. "setmetatable(" .. "values[\"" .. dataId .. "\"]".. ", " .. "values[\"" .. mtId .. "\"]" .. ")\n"
         end
 
-        registry.output = registry.output .. "local " .. tableOutput
+        registry.output = registry.output .. tableOutput
 
         -- Data is now fully defined
         registry.uncomplete[data] = nil
@@ -146,15 +146,15 @@ serializeValue = function(registry, value)
         elseif valueType == "boolean" then
             return serializeBoolean(value)
         elseif valueType == "table" then
-            return serializeTable(registry, value)
+            return "values[\"" .. serializeTable(registry, value) .. "\"]"
         elseif valueType == "function" then
-            return serializeFunction(registry, value)
+            return "values[\"" .. serializeFunction(registry, value) .. "\"]"
         else
             error("Data of type " .. valueType .. " is unsupported")
         end
     end
 
-    return registry.values[value]
+    return "values[\"" .. registry.values[value] .. "\"]"
 end
 
 return function(data)
@@ -166,13 +166,20 @@ return function(data)
         post = ""
     }
 
+    local preamble = "local values = {}\n"
+
     if _G.__classes then
         for name, class in pairs(_G.__classes) do
-            registry.values[class] = "_G.__classes[" .. serializeString(name) .. "]"
+            local dataId = "ls_" .. uuid():gsub("-", "_")
+            registry.values[class] = dataId
+            preamble = preamble .. "values[\"" .. dataId .. "\"]=_G.__classes[" .. serializeString(name) .. "]\n"
         end
     end
 
     local serialized = serializeValue(registry, data)
 
-    return registry.output .. registry.post .. "return " .. serialized
+    return preamble
+        .. registry.output
+        .. registry.post
+        .. "return " .. serialized
 end
